@@ -52,15 +52,8 @@ or more realistically:
 """
 
 import sys
-reload(sys)
-sys.setdefaultencoding('utf-8') # pylint: disable=no-member
-
 import sqlite3 as lite
-try:
-    import simplejson as json # pylint: disable=import-error
-except ImportError:
-    import json
-
+import json
 import logging
 
 log = logging.getLogger(__name__) #pylint: disable=invalid-name
@@ -73,7 +66,7 @@ except AttributeError:
     log.addHandler(logging.handlers.MemoryHandler(0))
 
 
-__version__ = '0.9.3'
+__version__ = '0.10.0'
 
 
 # These are the allowed operators for get()
@@ -88,15 +81,15 @@ _WHERE_OPERATORS = [  #pylint: disable=invalid-name
 def clean(unclean):
     ''' Makes a string safe (and unicode) to use as
         a column name in a SQLlite query '''
-    return unicode(unclean.replace('"','""'))
+    return unclean.replace('"','""')
 
 def cleanq(unclean):
     ''' Cleans a string, and sticks quotes around it, for use in
         SQLlite queries. '''
-    return u'"' + unicode(unclean.replace('"','""')) + u'"'
+    return '"' + unclean.replace('"','""') + '"'
 
 
-class NoJSON(unicode): # pylint: disable=too-many-public-methods
+class NoJSON(str): # pylint: disable=too-many-public-methods
     ''' a string type, which should *not* be json dumped.  *Very* useful
         for queries '''
     pass
@@ -122,7 +115,7 @@ def _prepare_values(document):
     *NOTE* this is lossy.  Un-jsonable data will simply
            be dropped into it's string version!
     '''
-    return [json.dumps(x, default=unicode, ensure_ascii=False) \
+    return [json.dumps(x, default=str, ensure_ascii=False) \
          for x in document.values()]
 
 def _make_where_clause(*args):
@@ -132,7 +125,7 @@ def _make_where_clause(*args):
     '''
 
     if len(args) == 0:
-        return u'', []
+        return '', []
 
     # collection boxes:
     where_clauses = []
@@ -142,27 +135,27 @@ def _make_where_clause(*args):
     for (col, operator, value) in args:
         if not operator in _WHERE_OPERATORS:
             raise KeyError('Invalid operator ({0})'.format(operator))
-        where_clauses.append(u' '.join([cleanq(col),
-                                        unicode(operator),
-                                        u'(?)']))
+        where_clauses.append(' '.join([cleanq(col),
+                                        operator,
+                                        '(?)']))
         if isinstance(value, NoJSON):
             sql_values.append(value)
         else:
             sql_values.append(json.dumps(value))
 
-    return u'WHERE' + u' AND '.join(where_clauses), sql_values
+    return 'WHERE' + ' AND '.join(where_clauses), sql_values
 
 
 ################################################################################
 
 
-class DictLiteStore(object):
+class DictLiteStore:
     '''
     A simple(ish) way to store dict-like objects in a SQLite database,
     which can then be queried against.  Useful for caching schemaless data.
     '''
 
-    def __init__(self, db_name=":memory:", table_name=u"def"):
+    def __init__(self, db_name=":memory:", table_name="def"):
         '''
         Initialise the object, but don't actually open the database
         connection yet.
@@ -178,18 +171,18 @@ class DictLiteStore(object):
         '''
 
         self.db = lite.connect(self.db_name)
-        self.db.text_factory = lambda x: x.encode('utf-8')
+        self.db.text_factory = lambda x: x.decode('utf-8')
         self.db.row_factory = lite.Row
         self.cur = self.db.cursor()
 
-        self.cur.execute(u'CREATE TABLE IF NOT EXISTS'
-                          ' "{0}"(Id INT)'.format(self.table_name))
+        self.cur.execute('CREATE TABLE IF NOT EXISTS'
+                          ' "{0}" (Id)'.format(self.table_name))
         self.db.commit()
 
         self.sql_columns = []
 
         # Get current columns:
-        self.cur.execute(u"PRAGMA table_info(\"{0}\")".format(self.table_name))
+        self.cur.execute("PRAGMA table_info(\"{0}\")".format(self.table_name))
 
         # Add them to the sql_columns list:
         for row in self.cur.fetchall()[1:]:
@@ -229,12 +222,12 @@ class DictLiteStore(object):
 
             # If needed, add a new column to the self.db:
             if key not in self.sql_columns:
-                sql = u"ALTER TABLE \"{0}\" " \
-                      u"ADD COLUMN \"{1}\"".format(self.table_name, key)
+                sql = "ALTER TABLE \"{0}\" " \
+                      "ADD COLUMN \"{1}\"".format(self.table_name, key)
                 self.cur.execute(sql)
                 self.sql_columns.append(key)
             # Add this item to the list of stuff to commit:
-            columns.append(u'"' + key + u'"')
+            columns.append('"' + key + '"')
 
         # Commit new columns:
         self.db.commit()
@@ -280,7 +273,7 @@ class DictLiteStore(object):
         sql, where_values = self._make_update(columns, args)
 
         # Debug logging
-        log.debug ('SQL: %s, DATA: %s, WHERE: %s', sql, values, where_values)
+        print ('SQL: %s, DATA: %s, WHERE: %s', sql, values, where_values)
 
         self.cur.execute(sql, values + where_values)
 
@@ -298,10 +291,10 @@ class DictLiteStore(object):
         return 'INSERT INTO "x"(column_names, etc) VALUES(?, ?)'
         '''
 
-        return u'INSERT INTO "{0}"({1}) VALUES({2})'.format( \
+        return 'INSERT INTO "{0}"({1}) VALUES({2})'.format( \
                     self.table_name, \
-                    u','.join(columns), \
-                    u','.join(len(columns)*u'?'))
+                    ','.join(columns), \
+                    ','.join(len(columns)*'?'))
 
     def _make_update(self, columns, where):
         '''
@@ -310,12 +303,12 @@ class DictLiteStore(object):
         '''
 
         # x=(?),y=(?),z=(?)
-        update_clause = u','.join([c + u'=(?)' for c in columns])
+        update_clause = ','.join([c + '=(?)' for c in columns])
 
         # WHERE ...
         where_clause, where_values = _make_where_clause(*where) #pylint: disable=star-args
 
-        return u'UPDATE "{0}" SET {1} {2}'.format(
+        return 'UPDATE "{0}" SET {1} {2}'.format(
             self.table_name,
             update_clause,
             where_clause
@@ -328,17 +321,17 @@ class DictLiteStore(object):
         '''
 
         if not order_input:
-            return u''
+            return ''
         if not hasattr(order_input, '__iter__'):
             # probably a string? So stuff it in a tuple.
             order_input = (order_input,)
 
         order_segments = []
         for order in order_input:
-            if len(order) == 2 and (order[1] == u'ASC' or order[1] == u'DESC'):
+            if len(order) == 2 and (order[1] == 'ASC' or order[1] == 'DESC'):
                 log.debug('sorting by %s, %s.', order[0], order[1])
                 if order[0] in self.sql_columns:
-                    order_segments.append(cleanq(order[0]) + u' ' + order[1])
+                    order_segments.append(cleanq(order[0]) + ' ' + order[1])
                 else:
                     log.warn('Trying to sort (ORDER), '
                              'but "%s" is not a column.', order[0])
@@ -346,9 +339,9 @@ class DictLiteStore(object):
                 order_segments.append(cleanq(order))
 
         if not order_segments:
-            return u''
+            return ''
 
-        return u'ORDER BY ' + u','.join(order_segments)
+        return 'ORDER BY ' + ','.join(order_segments)
 
 
     def get(self, *args, **vargs):
@@ -365,7 +358,7 @@ class DictLiteStore(object):
 
         '''
         # Work around python not liking *args before named args.
-        _options = {u'order': u'id'}
+        _options = {'order': 'id'}
         _options.update(vargs)
 
         ####
@@ -375,10 +368,10 @@ class DictLiteStore(object):
         where_clause, sql_values = _make_where_clause(*args)
 
         # Order by value gets tacked on the end:
-        order_clause = self._make_order_clause(_options[u'order'])
+        order_clause = self._make_order_clause(_options['order'])
 
         # Prepare the query:
-        sql = u'SELECT * FROM \"{0}\" {1} {2}'.format( \
+        sql = 'SELECT * FROM \"{0}\" {1} {2}'.format( \
             self.table_name, where_clause, order_clause)
 
 
@@ -387,7 +380,7 @@ class DictLiteStore(object):
         data = [dict(x) for x in self.cur.execute(sql, sql_values).fetchall()]
         for document in data:
             log.debug('ROW: %s', document)
-            for key, value in document.items():
+            for key, value in list(document.items()):
                 if value == None:
                     del document[key]
                 else:
@@ -399,7 +392,7 @@ class DictLiteStore(object):
         ''' a wrapper around sqlite DELETE '''
 
         where_clause, sql_values = _make_where_clause(*args)
-        sql = u'DELETE FROM \"{0}\" {1}'.format(self.table_name, where_clause)
+        sql = 'DELETE FROM \"{0}\" {1}'.format(self.table_name, where_clause)
 
         log.debug('SQL: %s; DATA: %s;', sql, sql_values)
 

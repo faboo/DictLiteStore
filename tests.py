@@ -6,9 +6,6 @@ Tests for DictLiteStore.
 '''
 
 import sys
-reload(sys)
-sys.setdefaultencoding('utf-8') # pylint: disable=no-member
-
 import os
 import os.path
 from dictlitestore import DictLiteStore, NoJSON, json_or_raw
@@ -101,8 +98,8 @@ class TestBasicDataTypes(Basic):
         self.store_and_compare(a)
 
     def test_function(self):
-        a = {'col1':'should work', 'col2': map}
-        b = {'col1':'should work', 'col2': '<built-in function map>'}
+        a = {'col1':'should work', 'col2': len}
+        b = {'col1':'should work', 'col2': '<built-in function len>'}
         self.store_and_compare(a, b)
 
     def test_class(self):
